@@ -23,9 +23,9 @@ def health_check_task() -> Dict[str, Any]:
 @shared_task(name="transcribe_and_process")
 def transcribe_and_process(session_id: str) -> Dict[str, Any]:
     """
-    Celery task that loads the audio file for a session, calls Groq whisper transcription,
-    generates a structured MeetingSummary via LangChain Groq LLM, saves the outputs to Postgres,
-    and updates the session status to summarized.
+    Celery task that loads the audio file for a session, performs Groq whisper transcription,
+    generates a structured MeetingSummary via LangChain Groq LLM, persists outputs to Postgres,
+    and updates session status to summarized. Sets status to failed with an error field if either step throws.
     """
     with SyncSessionLocal() as db:
         session = db.execute(
@@ -37,50 +37,38 @@ def transcribe_and_process(session_id: str) -> Dict[str, Any]:
 
         if not session.audio_file_path:
             session.status = SessionStatus.FAILED
+            session.summary = {"error": f"Session {session_id} has no audio_file_path"}
             db.commit()
             return {"error": f"Session {session_id} has no audio_file_path"}
 
         try:
-            # 1. Groq audio transcription
+            # Step 1: Transcribe audio using Groq whisper-large-v3-turbo
             transcript_text = transcribe_audio(session.audio_file_path)
             session.transcript = transcript_text
 
-            # 2. LangChain Groq structured LLM summarization
-            if settings.GROQ_API_KEY:
-                try:
-                    summary_obj = summarize_transcript(transcript_text)
-                    session.summary = summary_obj.model_dump()
-                except Exception as sum_err:
-                    session.summary = {
-                        "summary": f"Summarization error: {str(sum_err)}",
-                        "key_points": [],
-                        "action_items": [],
-                        "participants": None
-                    }
-            else:
-                session.summary = {
-                    "summary": "GROQ_API_KEY is not configured.",
-                    "key_points": [],
-                    "action_items": [],
-                    "participants": None
-                }
+            # Step 2: Summarize transcript using LangChain ChatGroq (llama-3.3-70b-versatile)
+            meeting_summary = summarize_transcript(transcript_text)
+            session.summary = meeting_summary.model_dump()
 
-            # 3. Update session status to next stage (SUMMARIZED)
+            # Step 3: Update session status to SUMMARIZED
             session.status = SessionStatus.SUMMARIZED
             db.commit()
 
             return {
                 "session_id": session_id,
                 "status": session.status.value,
-                "transcript_length": len(transcript_text)
+                "transcript_length": len(transcript_text),
+                "summary": session.summary
             }
         except Exception as e:
+            # Catch exceptions from either step, set status to FAILED, and persist error details
             session.status = SessionStatus.FAILED
+            session.summary = {"error": str(e)}
             db.commit()
             return {
                 "session_id": session_id,
                 "status": session.status.value,
-                "error": f"Processing failed: {str(e)}"
+                "error": str(e)
             }
 
 
