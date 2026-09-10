@@ -66,13 +66,20 @@ class RecordingSessionService:
                 detail=f"Recording session {session_id} not found"
             )
 
+        # Validate non-empty audio upload
+        content = await audio_file.read()
+        if not content or len(content) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Uploaded audio file is empty (0 bytes)."
+            )
+
         # Save uploaded audio file to disk
         file_filename = audio_file.filename or "recording.wav"
         saved_filename = f"{session_id}_{file_filename}"
         file_path = os.path.join(UPLOAD_DIR, saved_filename)
 
         with open(file_path, "wb") as buffer:
-            content = await audio_file.read()
             buffer.write(content)
 
         session.audio_file_path = file_path
