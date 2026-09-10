@@ -11,3 +11,6 @@ celery>=5.3.6
 python-multipart>=0.0.9
 groq>=0.4.0
 tenacity>=8.2.0
+langchain>=0.1.0
+langchain-groq>=0.1.0
+langchain-core>=0.1.0

@@ -6,6 +6,7 @@ from sqlalchemy.orm import sessionmaker
 from app.core.config import settings
 from app.models.recording_session import RecordingSession, SessionStatus
 from app.services.transcription import transcribe_audio
+from app.services.summarization import summarize_transcript
 
 # Sync engine for Celery worker tasks
 sync_db_uri = settings.SQLALCHEMY_DATABASE_URI.replace("postgresql+asyncpg://", "postgresql://")
@@ -23,7 +24,8 @@ def health_check_task() -> Dict[str, Any]:
 def transcribe_and_process(session_id: str) -> Dict[str, Any]:
     """
     Celery task that loads the audio file for a session, calls Groq whisper transcription,
-    saves the transcript to Postgres, and updates the session status to summarized.
+    generates a structured MeetingSummary via LangChain Groq LLM, saves the outputs to Postgres,
+    and updates the session status to summarized.
     """
     with SyncSessionLocal() as db:
         session = db.execute(
@@ -39,11 +41,31 @@ def transcribe_and_process(session_id: str) -> Dict[str, Any]:
             return {"error": f"Session {session_id} has no audio_file_path"}
 
         try:
-            # Perform Groq audio transcription
+            # 1. Groq audio transcription
             transcript_text = transcribe_audio(session.audio_file_path)
             session.transcript = transcript_text
 
-            # Update session status to next stage (SUMMARIZED)
+            # 2. LangChain Groq structured LLM summarization
+            if settings.GROQ_API_KEY:
+                try:
+                    summary_obj = summarize_transcript(transcript_text)
+                    session.summary = summary_obj.model_dump()
+                except Exception as sum_err:
+                    session.summary = {
+                        "summary": f"Summarization error: {str(sum_err)}",
+                        "key_points": [],
+                        "action_items": [],
+                        "participants": None
+                    }
+            else:
+                session.summary = {
+                    "summary": "GROQ_API_KEY is not configured.",
+                    "key_points": [],
+                    "action_items": [],
+                    "participants": None
+                }
+
+            # 3. Update session status to next stage (SUMMARIZED)
             session.status = SessionStatus.SUMMARIZED
             db.commit()
 
@@ -58,7 +80,7 @@ def transcribe_and_process(session_id: str) -> Dict[str, Any]:
             return {
                 "session_id": session_id,
                 "status": session.status.value,
-                "error": f"Transcription failed: {str(e)}"
+                "error": f"Processing failed: {str(e)}"
             }
 
 
