@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.recording_session import RecordingSession, SessionStatus
+from app.schemas.recording_session import RecordingSessionStatusResponse
 from app.core.celery_app import celery_app
 
 UPLOAD_DIR = os.path.join(os.getcwd(), "uploads")
@@ -97,3 +98,26 @@ class RecordingSessionService:
                 detail=f"Recording session {session_id} not found"
             )
         return session
+
+    @staticmethod
+    async def get_session_status(db: AsyncSession, session_id: uuid.UUID) -> RecordingSessionStatusResponse:
+        """Retrieve lightweight recording session status for polling."""
+        result = await db.execute(
+            select(RecordingSession).where(RecordingSession.id == session_id)
+        )
+        session = result.scalar_one_or_none()
+        if not session:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Recording session {session_id} not found"
+            )
+
+        error_msg = None
+        if isinstance(session.summary, dict) and "error" in session.summary:
+            error_msg = session.summary["error"]
+
+        return RecordingSessionStatusResponse(
+            id=session.id,
+            status=session.status,
+            error=error_msg
+        )

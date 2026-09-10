@@ -30,3 +30,11 @@ class RecordingSessionResponse(RecordingSessionBase):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class RecordingSessionStatusResponse(BaseModel):
+    id: UUID
+    status: SessionStatus
+    error: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)

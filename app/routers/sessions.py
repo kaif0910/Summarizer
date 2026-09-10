@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, File, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
-from app.schemas.recording_session import RecordingSessionResponse
+from app.schemas.recording_session import RecordingSessionResponse, RecordingSessionStatusResponse
 from app.services.recording_session_service import RecordingSessionService
 
 router = APIRouter()
@@ -36,3 +36,15 @@ async def stop_session(
 async def get_session(session_id: UUID, db: AsyncSession = Depends(get_db)):
     """Get recording session details (status, transcript, summary)."""
     return await RecordingSessionService.get_session(db=db, session_id=session_id)
+
+
+@router.get("/{session_id}/status", response_model=RecordingSessionStatusResponse)
+async def get_session_status(session_id: UUID, db: AsyncSession = Depends(get_db)):
+    """
+    Lightweight status endpoint optimized for frontend polling.
+
+    **Polling Guidance for Frontend**:
+    - Poll this endpoint every **2-3 seconds** while `status` is `recording` or `processing`.
+    - Stop polling once `status` reaches a terminal state (`summarized` or `failed`).
+    """
+    return await RecordingSessionService.get_session_status(db=db, session_id=session_id)
