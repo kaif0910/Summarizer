@@ -13,11 +13,17 @@ sync_engine = create_engine(sync_db_uri, echo=False)
 SyncSessionLocal = sessionmaker(bind=sync_engine)
 
 
-@shared_task(name="process_audio_session")
-def process_audio_session(session_id: str) -> Dict[str, Any]:
+@shared_task(name="health_check_task")
+def health_check_task() -> Dict[str, Any]:
+    """Health check task to verify Celery worker connectivity."""
+    return {"status": "ok", "worker": "connected"}
+
+
+@shared_task(name="transcribe_and_process")
+def transcribe_and_process(session_id: str) -> Dict[str, Any]:
     """
-    Background task for processing recorded audio sessions.
-    Transcribes audio using Groq's whisper-large-v3-turbo and generates text summary.
+    Celery task that loads the audio file for a session, calls Groq whisper transcription,
+    saves the transcript to Postgres, and updates the session status to summarized.
     """
     with SyncSessionLocal() as db:
         session = db.execute(
@@ -27,37 +33,36 @@ def process_audio_session(session_id: str) -> Dict[str, Any]:
         if not session:
             return {"error": f"Session {session_id} not found"}
 
-        # Perform Groq audio transcription if file exists & API key is set
-        if session.audio_file_path and settings.GROQ_API_KEY:
-            try:
-                session.transcript = transcribe_audio(session.audio_file_path)
-            except Exception as e:
-                session.status = SessionStatus.FAILED
-                db.commit()
-                return {"session_id": session_id, "error": f"Transcription failed: {str(e)}"}
-        else:
-            session.transcript = (
-                "Fallback transcript: Groq API key is not configured or audio file path is missing."
-            )
+        if not session.audio_file_path:
+            session.status = SessionStatus.FAILED
+            db.commit()
+            return {"error": f"Session {session_id} has no audio_file_path"}
 
-        # Generate summary payload
-        session.summary = {
-            "title": "Audio Recording Summary",
-            "key_points": [
-                "Groq whisper-large-v3-turbo transcription processing",
-                "FastAPI recording session lifecycle update",
-                "Asynchronous Celery task completion"
-            ],
-            "action_items": [
-                "Review transcript accuracy",
-                "Verify database record status transition"
-            ]
-        }
-        session.status = SessionStatus.SUMMARIZED
-        db.commit()
+        try:
+            # Perform Groq audio transcription
+            transcript_text = transcribe_audio(session.audio_file_path)
+            session.transcript = transcript_text
 
-        return {
-            "session_id": session_id,
-            "status": session.status.value,
-            "transcript_length": len(session.transcript) if session.transcript else 0
-        }
+            # Update session status to next stage (SUMMARIZED)
+            session.status = SessionStatus.SUMMARIZED
+            db.commit()
+
+            return {
+                "session_id": session_id,
+                "status": session.status.value,
+                "transcript_length": len(transcript_text)
+            }
+        except Exception as e:
+            session.status = SessionStatus.FAILED
+            db.commit()
+            return {
+                "session_id": session_id,
+                "status": session.status.value,
+                "error": f"Transcription failed: {str(e)}"
+            }
+
+
+@shared_task(name="process_audio_session")
+def process_audio_session(session_id: str) -> Dict[str, Any]:
+    """Alias/wrapper task forwarding to transcribe_and_process."""
+    return transcribe_and_process(session_id)

@@ -54,7 +54,7 @@ class RecordingSessionService:
         session_id: uuid.UUID,
         audio_file: UploadFile
     ) -> RecordingSession:
-        """Save uploaded audio file, transition status to processing, and dispatch Celery task."""
+        """Save uploaded audio file, transition status to processing, and dispatch transcribe_and_process Celery task."""
         result = await db.execute(
             select(RecordingSession).where(RecordingSession.id == session_id)
         )
@@ -79,8 +79,8 @@ class RecordingSessionService:
         await db.commit()
         await db.refresh(session)
 
-        # Dispatch Celery background task for transcription and summarization
-        celery_app.send_task("process_audio_session", args=[str(session_id)])
+        # Dispatch Celery background task transcribe_and_process
+        celery_app.send_task("transcribe_and_process", args=[str(session_id)])
 
         return session
 
