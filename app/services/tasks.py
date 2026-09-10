@@ -1,4 +1,5 @@
 import os
+import uuid
 import logging
 from typing import Any, Dict
 from celery import shared_task
@@ -36,8 +37,17 @@ def transcribe_and_process(session_id: str) -> Dict[str, Any]:
     """
     with SyncSessionLocal() as db:
         try:
+            # Ensure UUID object for database queries across Postgres & SQLite
+            if isinstance(session_id, str):
+                try:
+                    target_uuid = uuid.UUID(session_id)
+                except ValueError:
+                    target_uuid = session_id
+            else:
+                target_uuid = session_id
+
             session = db.execute(
-                select(RecordingSession).where(RecordingSession.id == session_id)
+                select(RecordingSession).where(RecordingSession.id == target_uuid)
             ).scalar_one_or_none()
 
             if not session:
@@ -68,7 +78,7 @@ def transcribe_and_process(session_id: str) -> Dict[str, Any]:
                 session.status = SessionStatus.FAILED
                 session.summary = {"error": error_msg}
                 db.commit()
-                return {"session_id": session_id, "status": session.status.value, "error": error_msg}
+                return {"session_id": str(session_id), "status": session.status.value, "error": error_msg}
 
             # Step 2: LangChain Groq LLM Summarization
             try:
@@ -80,7 +90,7 @@ def transcribe_and_process(session_id: str) -> Dict[str, Any]:
                 session.status = SessionStatus.FAILED
                 session.summary = {"error": error_msg}
                 db.commit()
-                return {"session_id": session_id, "status": session.status.value, "error": error_msg}
+                return {"session_id": str(session_id), "status": session.status.value, "error": error_msg}
 
             # Step 3: Transition session status to SUMMARIZED
             session.status = SessionStatus.SUMMARIZED
@@ -99,7 +109,7 @@ def transcribe_and_process(session_id: str) -> Dict[str, Any]:
                 logger.warning(f"ChromaDB indexing warning for session {session_id}: {vec_err}")
 
             return {
-                "session_id": session_id,
+                "session_id": str(session_id),
                 "status": session.status.value,
                 "transcript_length": len(transcript_text),
                 "summary": session.summary
@@ -108,10 +118,10 @@ def transcribe_and_process(session_id: str) -> Dict[str, Any]:
         except SQLAlchemyError as db_err:
             db.rollback()
             logger.error(f"Database transaction error during task execution for session {session_id}: {db_err}")
-            return {"session_id": session_id, "error": f"Database error: {str(db_err)}"}
+            return {"session_id": str(session_id), "error": f"Database error: {str(db_err)}"}
         except Exception as general_err:
             logger.error(f"Unhandled task error for session {session_id}: {general_err}")
-            return {"session_id": session_id, "error": f"Unhandled error: {str(general_err)}"}
+            return {"session_id": str(session_id), "error": f"Unhandled error: {str(general_err)}"}
 
 
 @shared_task(name="process_audio_session")
