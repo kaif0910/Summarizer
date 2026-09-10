@@ -44,6 +44,9 @@ class Settings(BaseSettings):
         port = values.get("REDIS_PORT")
         return f"redis://{host}:{port}/0"
 
+    # Groq API Key Configuration
+    GROQ_API_KEY: Optional[str] = None
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
