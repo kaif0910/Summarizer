@@ -1,10 +1,15 @@
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.core.db import Base, engine
 from app.routers import api_router
+
+STATIC_DIR = os.path.join(os.getcwd(), "static")
+os.makedirs(STATIC_DIR, exist_ok=True)
 
 
 @asynccontextmanager
@@ -32,14 +37,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include API Routers
+# Include API Routers under /api/v1
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
-
-@app.get("/")
-async def root():
-    return {
-        "message": f"Welcome to {settings.PROJECT_NAME}",
-        "docs": "/docs",
-        "health": f"{settings.API_V1_STR}/health"
-    }
+# Mount single-page HTML/JS client at root /
+app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

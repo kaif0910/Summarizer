@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Audio Summarizer & Assistant</title>
+    <!-- Google Fonts Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --accent-blue: #38bdf8;
+            --accent-purple: #a855f7;
+            --accent-green: #22c55e;
+            --accent-red: #ef4444;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: radial-gradient(circle at top, #1e1b4b 0%, #0f172a 60%, #020617 100%);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 2rem 1rem;
+            display: flex;
+            justify-content: center;
+        }
+
+        .app-container {
+            max-width: 900px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
+        header h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+
+        header p {
+            color: var(--text-muted);
+            font-size: 1rem;
+        }
+
+        .glass-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            backdrop-filter: blur(16px);
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        /* Controls Section */
+        .recorder-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.25rem;
+            text-align: center;
+        }
+
+        .timer-display {
+            font-size: 2.5rem;
+            font-weight: 600;
+            font-family: monospace;
+            color: var(--accent-blue);
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 1rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--card-border);
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--text-muted);
+        }
+
+        .status-dot.recording {
+            background: var(--accent-red);
+            box-shadow: 0 0 12px var(--accent-red);
+            animation: pulse 1.5s infinite;
+        }
+
+        .status-dot.processing {
+            background: var(--accent-purple);
+            box-shadow: 0 0 12px var(--accent-purple);
+            animation: pulse 1.5s infinite;
+        }
+
+        .status-dot.summarized {
+            background: var(--accent-green);
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(1.2); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 1rem;
+        }
+
+        button {
+            padding: 0.75rem 1.75rem;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s ease-in-out;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-start {
+            background: linear-gradient(135deg, #0284c7, #2563eb);
+            color: white;
+            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
+        }
+
+        .btn-start:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.6);
+        }
+
+        .btn-stop {
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+            color: white;
+            box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4);
+        }
+
+        .btn-stop:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(220, 38, 38, 0.6);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        audio {
+            width: 100%;
+            margin-top: 1rem;
+            border-radius: 8px;
+        }
+
+        /* Results Display */
+        .results-section {
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        .section-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--accent-blue);
+            border-bottom: 1px solid var(--card-border);
+            padding-bottom: 0.5rem;
+        }
+
+        .summary-card p {
+            line-height: 1.6;
+            color: #e2e8f0;
+        }
+
+        .list-box {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .list-item {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 0.6rem 1rem;
+            border-radius: 8px;
+            border-left: 3px solid var(--accent-purple);
+            font-size: 0.95rem;
+        }
+
+        .badge-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .badge {
+            background: rgba(56, 189, 248, 0.15);
+            color: var(--accent-blue);
+            padding: 0.3rem 0.8rem;
+            border-radius: 9999px;
+            font-size: 0.85rem;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+        }
+
+        .transcript-text {
+            background: rgba(15, 23, 42, 0.6);
+            padding: 1rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            border: 1px solid var(--card-border);
+        }
+
+        /* Search Section */
+        .search-box {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border-radius: 12px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--card-border);
+            color: white;
+            font-size: 0.95rem;
+            outline: none;
+        }
+
+        .search-input:focus {
+            border-color: var(--accent-blue);
+        }
+
+        .search-results {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        .search-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--card-border);
+            padding: 1rem;
+            border-radius: 10px;
+            font-size: 0.9rem;
+        }
+
+        .search-card-meta {
+            display: flex;
+            justify-content: space-between;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            margin-bottom: 0.4rem;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <header>
+        <h1>AI Audio Summarizer</h1>
+        <p>Record meeting audio, transcribe with Groq Whisper, and generate structured summaries with Llama 3.3</p>
+    </header>
+
+    <!-- Audio Recorder Box -->
+    <div class="glass-card recorder-box">
+        <div class="status-badge" id="statusBadge">
+            <span class="status-dot" id="statusDot"></span>
+            <span id="statusText">Status: Idle</span>
+        </div>
+
+        <div class="timer-display" id="timerDisplay">00:00</div>
+
+        <div class="btn-group">
+            <button class="btn-start" id="startBtn">
+                <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+                Start Recording
+            </button>
+            <button class="btn-stop" id="stopBtn" disabled>
+                <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
+                Stop & Process
+            </button>
+        </div>
+
+        <audio id="audioPlayback" controls class="hidden"></audio>
+    </div>
+
+    <!-- Summary & Output Results -->
+    <div class="glass-card results-section hidden" id="resultsCard">
+        <div class="section-title">Meeting Executive Summary</div>
+        <div class="summary-card">
+            <p id="summaryText">Summarizing...</p>
+        </div>
+
+        <div class="section-title">Key Discussion Points</div>
+        <div class="list-box" id="keyPointsList"></div>
+
+        <div class="section-title">Action Items</div>
+        <div class="list-box" id="actionItemsList"></div>
+
+        <div class="section-title">Participants</div>
+        <div class="badge-list" id="participantsList"></div>
+
+        <div class="section-title">Full Audio Transcript</div>
+        <div class="transcript-text" id="transcriptText"></div>
+    </div>
+
+    <!-- Semantic Search Section -->
+    <div class="glass-card">
+        <div class="section-title">Semantic Vector Search (ChromaDB)</div>
+        <div class="search-box" style="margin-top: 1rem;">
+            <input type="text" class="search-input" id="searchInput" placeholder="Search past sessions by topic or keyword (e.g., 'database architecture')...">
+            <button class="btn-start" id="searchBtn">Search</button>
+        </div>
+        <div class="search-results" id="searchResults"></div>
+    </div>
+</div>
+
+<script>
+    const API_BASE = "/api/v1";
+
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let currentSessionId = null;
+    let timerInterval = null;
+    let pollInterval = null;
+    let startTime = 0;
+
+    // UI Elements
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const timerDisplay = document.getElementById('timerDisplay');
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const audioPlayback = document.getElementById('audioPlayback');
+    const resultsCard = document.getElementById('resultsCard');
+    const summaryText = document.getElementById('summaryText');
+    const keyPointsList = document.getElementById('keyPointsList');
+    const actionItemsList = document.getElementById('actionItemsList');
+    const participantsList = document.getElementById('participantsList');
+    const transcriptText = document.getElementById('transcriptText');
+    const searchInput = document.getElementById('searchInput');
+    const searchBtn = document.getElementById('searchBtn');
+    const searchResults = document.getElementById('searchResults');
+
+    function updateStatus(state, message) {
+        statusDot.className = `status-dot ${state}`;
+        statusText.textContent = `Status: ${message}`;
+    }
+
+    function formatTime(seconds) {
+        const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+        const secs = (seconds % 60).toString().padStart(2, '0');
+        return `${mins}:${secs}`;
+    }
+
+    function startTimer() {
+        startTime = Date.now();
+        timerDisplay.textContent = "00:00";
+        timerInterval = setInterval(() => {
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            timerDisplay.textContent = formatTime(elapsed);
+        }, 1000);
+    }
+
+    function stopTimer() {
+        clearInterval(timerInterval);
+    }
+
+    // Start Recording Action
+    startBtn.addEventListener('click', async () => {
+        try {
+            audioChunks = [];
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    audioChunks.push(event.data);
+                }
+            };
+
+            // 1. Create Session
+            const createRes = await fetch(`${API_BASE}/sessions`, { method: 'POST' });
+            const sessionData = await createRes.json();
+            currentSessionId = sessionData.id;
+
+            // 2. Start Session Endpoint
+            await fetch(`${API_BASE}/sessions/${currentSessionId}/start`, { method: 'POST' });
+
+            mediaRecorder.start();
+            startTimer();
+
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+            audioPlayback.classList.add('hidden');
+            resultsCard.classList.add('hidden');
+            updateStatus('recording', 'Recording Audio...');
+        } catch (err) {
+            alert('Microphone access or session initialization error: ' + err.message);
+        }
+    });
+
+    // Stop Recording & Upload Action
+    stopBtn.addEventListener('click', () => {
+        if (!mediaRecorder) return;
+
+        mediaRecorder.stop();
+        stopTimer();
+
+        mediaRecorder.onstop = async () => {
+            // Stop media stream tracks
+            mediaRecorder.stream.getTracks().forEach(track => track.stop());
+
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            const audioUrl = URL.createObjectURL(audioBlob);
+            audioPlayback.src = audioUrl;
+            audioPlayback.classList.remove('hidden');
+
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            updateStatus('processing', 'Uploading Audio...');
+
+            // Form Data Payload
+            const formData = new FormData();
+            formData.append('file', audioBlob, 'recording.webm');
+
+            try {
+                // 3. Stop Endpoint with Upload
+                await fetch(`${API_BASE}/sessions/${currentSessionId}/stop`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                updateStatus('processing', 'Transcribing & Summarizing with Groq & Llama 3.3...');
+                startPolling(currentSessionId);
+            } catch (err) {
+                updateStatus('', 'Upload Failed');
+                alert('Failed to upload audio: ' + err.message);
+            }
+        };
+    });
+
+    // Polling /status Endpoint
+    function startPolling(sessionId) {
+        if (pollInterval) clearInterval(pollInterval);
+
+        pollInterval = setInterval(async () => {
+            try {
+                const res = await fetch(`${API_BASE}/sessions/${sessionId}/status`);
+                const data = await res.json();
+
+                if (data.status === 'summarized') {
+                    clearInterval(pollInterval);
+                    updateStatus('summarized', 'Completed');
+                    fetchAndRenderResults(sessionId);
+                } else if (data.status === 'failed') {
+                    clearInterval(pollInterval);
+                    updateStatus('', `Failed: ${data.error || 'Unknown error'}`);
+                    alert('Session processing failed: ' + (data.error || 'Unknown error'));
+                }
+            } catch (err) {
+                console.error('Polling status error:', err);
+            }
+        }, 2000);
+    }
+
+    // Fetch and Render Complete Summary Results
+    async function fetchAndRenderResults(sessionId) {
+        try {
+            const res = await fetch(`${API_BASE}/sessions/${sessionId}`);
+            const data = await res.json();
+
+            transcriptText.textContent = data.transcript || "No transcript available.";
+
+            const summaryObj = data.summary || {};
+            summaryText.textContent = summaryObj.summary || "No summary text available.";
+
+            // Render Key Points
+            keyPointsList.innerHTML = '';
+            (summaryObj.key_points || []).forEach(pt => {
+                const div = document.createElement('div');
+                div.className = 'list-item';
+                div.textContent = pt;
+                keyPointsList.appendChild(div);
+            });
+
+            // Render Action Items
+            actionItemsList.innerHTML = '';
+            (summaryObj.action_items || []).forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'list-item';
+                div.style.borderLeftColor = 'var(--accent-blue)';
+                div.textContent = item;
+                actionItemsList.appendChild(div);
+            });
+
+            // Render Participants
+            participantsList.innerHTML = '';
+            (summaryObj.participants || []).forEach(p => {
+                const span = document.createElement('span');
+                span.className = 'badge';
+                span.textContent = p;
+                participantsList.appendChild(span);
+            });
+
+            resultsCard.classList.remove('hidden');
+        } catch (err) {
+            alert('Error rendering results: ' + err.message);
+        }
+    }
+
+    // Semantic Vector Search Action
+    async function performSearch() {
+        const query = searchInput.value.trim();
+        if (!query) return;
+
+        searchResults.innerHTML = '<div style="color: var(--text-muted);">Searching ChromaDB...</div>';
+
+        try {
+            const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}`);
+            const data = await res.json();
+
+            searchResults.innerHTML = '';
+            if (!data.results || data.results.length === 0) {
+                searchResults.innerHTML = '<div style="color: var(--text-muted);">No matching past sessions found.</div>';
+                return;
+            }
+
+            data.results.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'search-card';
+                card.innerHTML = `
+                    <div class="search-card-meta">
+                        <span>Session ID: ${item.session_id}</span>
+                        <span>Date: ${item.metadata.date || 'N/A'}</span>
+                    </div>
+                    <p style="color: #e2e8f0;">${item.document}</p>
+                `;
+                searchResults.appendChild(card);
+            });
+        } catch (err) {
+            searchResults.innerHTML = `<div style="color: var(--accent-red);">Search failed: ${err.message}</div>`;
+        }
+    }
+
+    searchBtn.addEventListener('click', performSearch);
+    searchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') performSearch();
+    });
+</script>
+
+</body>
+</html>
