@@ -1,16 +1,17 @@
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
 from app.models.recording_session import SessionStatus
+from app.schemas.summary import MeetingSummary
 
 
 class RecordingSessionBase(BaseModel):
     status: SessionStatus = SessionStatus.IDLE
     audio_file_path: Optional[str] = None
     transcript: Optional[str] = None
-    summary: Optional[Dict[str, Any]] = None
+    summary: Optional[Union[MeetingSummary, Dict[str, Any]]] = None
 
 
 class RecordingSessionCreate(BaseModel):
@@ -21,7 +22,7 @@ class RecordingSessionUpdate(BaseModel):
     status: Optional[SessionStatus] = None
     audio_file_path: Optional[str] = None
     transcript: Optional[str] = None
-    summary: Optional[Dict[str, Any]] = None
+    summary: Optional[Union[MeetingSummary, Dict[str, Any]]] = None
 
 
 class RecordingSessionResponse(RecordingSessionBase):

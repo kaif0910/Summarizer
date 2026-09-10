@@ -4,11 +4,13 @@ from app.schemas.recording_session import (
     RecordingSessionResponse,
     RecordingSessionUpdate,
 )
+from app.schemas.summary import MeetingSummary
 
 __all__ = [
     "ItemCreate",
     "ItemResponse",
     "ItemUpdate",
+    "MeetingSummary",
     "RecordingSessionCreate",
     "RecordingSessionResponse",
     "RecordingSessionUpdate",
