@@ -1,10 +1,12 @@
 from uuid import UUID
-from fastapi import APIRouter, Depends, File, UploadFile, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
 from app.schemas.recording_session import RecordingSessionResponse, RecordingSessionStatusResponse
+from app.schemas.search import SearchResponse, SearchResultItem
 from app.services.recording_session_service import RecordingSessionService
+from app.services.vector_service import VectorService
 
 router = APIRouter()
 
@@ -14,6 +16,17 @@ router = APIRouter()
 async def create_session(db: AsyncSession = Depends(get_db)):
     """Create a new recording session with status=idle."""
     return await RecordingSessionService.create_session(db=db)
+
+
+@router.get("/search", response_model=SearchResponse)
+async def search_recording_sessions(
+    q: str = Query(..., min_length=1, description="Semantic search query text"),
+    limit: int = Query(5, ge=1, le=50, description="Max results to return")
+):
+    """Perform semantic vector search across past summarized sessions using ChromaDB."""
+    raw_results = VectorService.search_sessions(query=q, limit=limit)
+    items = [SearchResultItem(**item) for item in raw_results]
+    return SearchResponse(query=q, count=len(items), results=items)
 
 
 @router.post("/{session_id}/start", response_model=RecordingSessionResponse)

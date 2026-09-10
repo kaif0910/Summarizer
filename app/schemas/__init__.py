@@ -5,6 +5,7 @@ from app.schemas.recording_session import (
     RecordingSessionStatusResponse,
     RecordingSessionUpdate,
 )
+from app.schemas.search import SearchResponse, SearchResultItem
 from app.schemas.summary import MeetingSummary
 
 __all__ = [
@@ -16,4 +17,6 @@ __all__ = [
     "RecordingSessionResponse",
     "RecordingSessionStatusResponse",
     "RecordingSessionUpdate",
+    "SearchResponse",
+    "SearchResultItem",
 ]

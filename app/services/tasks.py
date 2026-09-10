@@ -7,6 +7,7 @@ from app.core.config import settings
 from app.models.recording_session import RecordingSession, SessionStatus
 from app.services.transcription import transcribe_audio
 from app.services.summarization import summarize_transcript
+from app.services.vector_service import VectorService
 
 # Sync engine for Celery worker tasks
 sync_db_uri = settings.SQLALCHEMY_DATABASE_URI.replace("postgresql+asyncpg://", "postgresql://")
@@ -25,7 +26,7 @@ def transcribe_and_process(session_id: str) -> Dict[str, Any]:
     """
     Celery task that loads the audio file for a session, performs Groq whisper transcription,
     generates a structured MeetingSummary via LangChain Groq LLM, persists outputs to Postgres,
-    and updates session status to summarized. Sets status to failed with an error field if either step throws.
+    indexes transcript in ChromaDB, and updates session status to summarized.
     """
     with SyncSessionLocal() as db:
         session = db.execute(
@@ -54,6 +55,18 @@ def transcribe_and_process(session_id: str) -> Dict[str, Any]:
             session.status = SessionStatus.SUMMARIZED
             db.commit()
 
+            # Step 4: Index transcript in ChromaDB vector store with metadata (session_id, date)
+            try:
+                created_date = session.created_at.isoformat() if session.created_at else ""
+                VectorService.index_session(
+                    session_id=str(session.id),
+                    text=transcript_text,
+                    date_str=created_date,
+                    metadata_extra={"session_id": str(session.id), "date": created_date}
+                )
+            except Exception as vec_err:
+                pass
+
             return {
                 "session_id": session_id,
                 "status": session.status.value,
@@ -61,7 +74,6 @@ def transcribe_and_process(session_id: str) -> Dict[str, Any]:
                 "summary": session.summary
             }
         except Exception as e:
-            # Catch exceptions from either step, set status to FAILED, and persist error details
             session.status = SessionStatus.FAILED
             session.summary = {"error": str(e)}
             db.commit()
