@@ -6,3 +6,5 @@ sqlalchemy>=2.0.28
 asyncpg>=0.29.0
 redis>=5.0.3
 python-dotenv>=1.0.1
+alembic>=1.13.1
+
